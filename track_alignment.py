@@ -38,9 +38,10 @@ while True:
     # Draw a line in the middle of the screen parallel to with the y-axis with reduced opacity
     center_x = frame.shape[1] // 2
     line_color = (255, 255, 0) # Blue color
-    line_opacity = 0.5 
+    line_thickness = 6
+    line_opacity = 0.3 
     overlay = frame.copy()
-    cv.line(overlay, (center_x, 1), (center_x, frame_height), line_color, 1) # Blue line
+    cv.line(overlay, (center_x, 1), (center_x, frame_height), line_color, line_thickness, 1) # Blue line
     cv.addWeighted(overlay, line_opacity, frame, 1 - line_opacity, 0, frame)  # Blend the line with the frame using addWeighted
     
     #frame = cv.resize(frame, (480, 640))
@@ -65,12 +66,31 @@ while True:
                 
             # Calculate the centroid of the mask
             if obj_cls==1:
+
+                scale_factor = 5.0
                 #only run if track is found    
                 M = cv.moments(seg_int)
                 if M['m00'] != 0:
                     cX = int(M['m10'] / M['m00'])
                     cY = int(M['m01'] / M['m00'])
                     center_coords = (cX, cY)
+
+                    # Scale the centroid coordinates
+                    cX_scaled = int(cX * scale_factor)
+                    cY_scaled = int(cY * scale_factor)
+
+                    # Rotate the centroid 90 degrees counter-clockwise around the center of the frame
+                    center_x = frame.shape[1] // 2
+                    center_y = frame.shape[0] // 2
+
+                    angle_rad = math.radians(90)  # Convert angle to radians for math functions
+                    cos_theta = math.cos(angle_rad)
+                    sin_theta = math.sin(angle_rad)
+
+                    rotated_cX = int((cX_scaled - center_x) * cos_theta - (cY_scaled - center_y) * sin_theta + center_x)
+                    rotated_cY = int((cX_scaled - center_x) * sin_theta + (cY_scaled - center_y) * cos_theta + center_y)
+
+                    #Now use rotated_cX and rotated_cY in your further processing or drawing
                     # Draw the mask on the mask_image
                     cv.fillPoly(mask_image, [seg_int], color=(0, 255, 0))  # Green color
 
@@ -81,17 +101,21 @@ while True:
                     # Calculate angle relative to center line
                     angle = math.atan2(cY - frame.shape[0] // 2, cX - center_x)
                     angle_deg = math.degrees(angle)
+                    angle_deg_int = round(angle_deg)
             
+                    label = f'{(angle_deg_int)}'
+                    # # Determine label based on angle
+                    # if -45 <= angle_deg <= 45:
+                    #     label = '0' # parallel to center line
+                    # elif angle_deg > 45:
+                    #     label = f'{(angle_deg - 45) / 45:.2f}' # Perpendicular to right
+                    # else:
+                    #     label = f'{(angle_deg + 45) / 45:.2f}' # Perpendicular to left
 
-                    # Determine label based on angle
-                    if -45 <= angle_deg <= 45:
-                        label = '0' # parallel to center line
-                    elif angle_deg > 45:
-                        label = f'{(angle_deg - 45) / 45:.2f}' # Perpendicular to right
-                    else:
-                        label = f'{(angle_deg + 45) / 45:.2f}' # Perpendicular to left
+                    # Rotate the centroid relative to the orientation of the mask
+                    rotated_cX = cX
+                    rotated_cY = cY
 
-                   
                     # Draw the line on the frame
                     if len(seg_int) > 2:  # Ensure there are enough points to fit a line
                         [vx, vy, x0, y0] = cv.fitLine(seg_int, cv.DIST_L2, 0, 0.01, 0.01)
@@ -106,13 +130,13 @@ while True:
                     #  cv.polylines(frame, [np.array(path, np.int32)], False, (0, 0, 255), 2)  # Red line
                         pass
                     #label = f'{objs_lst[int(obj_cls)]}: {conf:.2f} @ ({center_coords[0]}, {center_coords[1]})'
-                    cv.putText(frame, label, (center_coords[0] - 50, center_coords[1] - 10), cv.FONT_HERSHEY_SIMPLEX, 0.5, (255, 51, 255), 1) # Draw label near centroid
+                    cv.putText(frame, label, (rotated_cX - 50, rotated_cY - 10), cv.FONT_HERSHEY_SIMPLEX, 0.5, (255, 51, 255), 1) # Draw label near centroid
             else:
                  cv.fillPoly(mask_image, [seg_int], color=(0, 255, 0))  # Green color
                  label = f'{objs_lst[int(obj_cls)]}: {conf:.2f})'
                  #cv.putText(frame, label, (seg_int[0, 0], seg_int[0, 1]), cv.FONT_HERSHEY_SIMPLEX, 0.5, (255, 51, 255), 1) # Optionally, add text showing the class, confidence, and coordinates
                  cv.putText(frame, label, (cX - 50, cY - 10), cv.FONT_HERSHEY_SIMPLEX, 0.5, (255, 51, 255), 1)
-            # Blend the mask_image with the frame
+            #Blend the mask_image with the frame
             #frame = cv.addWeighted(frame, 0.7, mask_image, 0.3, 0)
             #f, _, _ = fpc.get_fps()
             #print('Frame rate is ', f)
